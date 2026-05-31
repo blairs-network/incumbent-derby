@@ -1,0 +1,7 @@
+venv/
+node_modules/
+dist/
+backend/derby.db
+*.pyc
+__pycache__/
+.env
