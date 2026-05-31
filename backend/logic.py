@@ -68,10 +68,15 @@ class AnthropicModel:
             "system": system,
             "messages": [{"role": "user", "content": prompt}],
         }
+        auth = (
+            {"Authorization": f"Bearer {self.api_key}"}
+            if self.api_key.startswith("sk-ant-si-")
+            else {"x-api-key": self.api_key}
+        )
         headers = {
             "content-type": "application/json",
-            "x-api-key": self.api_key,
             "anthropic-version": self.version,
+            **auth,
         }
         response = httpx.post(self.url, json=payload, headers=headers, timeout=120)
         response.raise_for_status()

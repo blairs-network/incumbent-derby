@@ -17,7 +17,7 @@ class Base(DeclarativeBase):
 
 def get_database_url() -> str:
     """Return the database URL from the environment or use a default."""
-    return os.getenv("DATABASE_URL", "sqlite:///./derby.db")
+    return os.getenv("DATABASE_URL", "sqlite:///./backend/derby.db")
 
 
 def get_engine():

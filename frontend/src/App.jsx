@@ -38,7 +38,7 @@ export default function App() {
   const [judges, setJudges] = useState(5);
   const [maxRounds, setMaxRounds] = useState(5);
   const [stopAfter, setStopAfter] = useState(2);
-  const [mock, setMock] = useState(true);
+  const [mock, setMock] = useState(false);
 
   const [status, setStatus] = useState("idle"); // idle · running · racing · done
   const [error, setError] = useState("");
