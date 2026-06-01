@@ -224,12 +224,18 @@ def decide(points: Dict[str, int]) -> str:
 
 def run_tournament(model, goal: str, original: str, max_rounds: int = 5,
                    n_judges: int = 5, stop_after: int = 2,
-                   seed: int = 0) -> Tuple[bool, str, List[dict], str]:
+                   seed: int = 0,
+                   external_candidates: Optional[Dict[str, str]] = None) -> Tuple[bool, str, List[dict], str]:
     """Run the full Derby.
 
     Returns ``(changed, final_text, rounds, stop_reason)``. Each round dict
     carries the candidate texts and names, the anonymized judge transcript, the
     Borda points, and the winner.
+
+    ``external_candidates`` maps slot ids (A, B, AB) to pre-written revision
+    texts submitted by external agents. Provided slots skip model generation in
+    round 1 only; subsequent rounds always generate fresh revisions from the
+    incumbent.
     """
     rng = random.Random(seed)
     incumbent = original.strip()
@@ -237,9 +243,10 @@ def run_tournament(model, goal: str, original: str, max_rounds: int = 5,
     rounds: List[dict] = []
 
     for r in range(1, max_rounds + 1):
-        cand_a = generate(model, goal, incumbent, A)
-        cand_b = generate(model, goal, incumbent, B)
-        cand_ab = generate(model, goal, incumbent, AB, peers={A: cand_a, B: cand_b})
+        ext = external_candidates if r == 1 else None
+        cand_a = ext[A] if ext and A in ext else generate(model, goal, incumbent, A)
+        cand_b = ext[B] if ext and B in ext else generate(model, goal, incumbent, B)
+        cand_ab = ext[AB] if ext and AB in ext else generate(model, goal, incumbent, AB, peers={A: cand_a, B: cand_b})
         candidates = {ORIGINAL: incumbent, A: cand_a, B: cand_b, AB: cand_ab}
 
         points, transcript = judge_panel(model, goal, candidates, n_judges, rng)
