@@ -10,6 +10,7 @@ export default defineConfig({
     proxy: {
       '/derbies': 'http://localhost:8000',
       '/agents': 'http://localhost:8000',
+      '/wallets': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
     },
   },
