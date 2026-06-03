@@ -1,29 +1,17 @@
-"""Pydantic schemas used by the API to validate input and shape responses."""
+"""Pydantic schemas for the Incumbent Derby API."""
 
 from __future__ import annotations
 
 import datetime
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 
-class AgentEntryInput(BaseModel):
-    """An external agent's revision submission for a derby."""
-    handle: str = Field(..., description="Agent identifier")
-    text: str = Field(..., description="The revision text to compete with")
-    slot: str = Field(default="A", description="Candidate slot to enter: A (Bold Edit), B (Surgical Edit), or AB (Hybrid Beast)")
-
-
-class AgentEntryResult(BaseModel):
-    """Result of an agent's entry after the tournament."""
-    handle: str
-    slot: str
-    won: bool
-
+# ── agents ────────────────────────────────────────────────────────────────────
 
 class AgentCreate(BaseModel):
-    handle: str = Field(..., description="Unique agent handle")
+    handle: str
 
 
 class AgentResponse(BaseModel):
@@ -34,33 +22,70 @@ class AgentResponse(BaseModel):
     win_rate: float
 
 
-class DerbyCreate(BaseModel):
-    """Request body for creating a new derby."""
+class AgentEntryInput(BaseModel):
+    handle: str
+    text: str
+    slot: str = Field(default="A", description="A (Bold Edit) | B (Surgical Edit) | AB (Hybrid Beast)")
 
-    original_text: str = Field(..., description="The original text to revise")
-    goal: str = Field(..., description="The goal for the revision")
-    judges: int = Field(default=5, ge=1, le=15, description="Number of judges in the panel")
-    max_rounds: int = Field(default=5, ge=1, le=10, description="Maximum number of rounds")
-    stop_after: int = Field(default=2, ge=1, le=5, description="Consecutive incumbent wins to stop")
-    mock_mode: bool = Field(default=False, description="Use the deterministic mock model")
-    agent_entries: List[AgentEntryInput] = Field(default_factory=list, description="External agent revision submissions")
+
+class AgentEntryResult(BaseModel):
+    handle: str
+    slot: str
+    won: bool
+
+
+# ── wallets & bets ────────────────────────────────────────────────────────────
+
+class WalletResponse(BaseModel):
+    handle: str
+    balance: float
+
+
+class BetCreate(BaseModel):
+    bettor_handle: str
+    prediction: str = Field(..., description="CHANGE ADOPTED or KEEP ORIGINAL")
+    amount: float = Field(gt=0, le=10000)
+
+
+class BetResponse(BaseModel):
+    id: int
+    derby_id: int
+    bettor_handle: str
+    prediction: str
+    amount: float
+    placed_at: datetime.datetime
+    settled: bool
+    won: Optional[bool] = None
+    payout: float = 0.0
+
+
+# ── derbies ───────────────────────────────────────────────────────────────────
+
+class DerbyCreate(BaseModel):
+    original_text: str
+    goal: str
+    judges: int = Field(default=5, ge=1, le=15)
+    max_rounds: int = Field(default=5, ge=1, le=10)
+    stop_after: int = Field(default=2, ge=1, le=5)
+    mock_mode: bool = Field(default=False)
+    model: str = Field(default="anthropic/claude-sonnet-4-6")
+    async_mode: bool = Field(default=False)
+    betting_window: int = Field(default=30, ge=0, le=300, description="Seconds for betting before race starts")
+    agent_entries: List[AgentEntryInput] = Field(default_factory=list)
 
 
 class Candidate(BaseModel):
-    """One runner in a round: its racing name and its text."""
     name: str
     text: str
 
 
 class JudgeRanking(BaseModel):
-    """One judge's anonymized ranking, translated back to real candidate ids."""
     judge: int
     lens: str
     ranking: List[str]
 
 
 class RoundReport(BaseModel):
-    """A single tournament round."""
     index: int
     candidates: Dict[str, Candidate]
     rankings: List[JudgeRanking]
@@ -71,7 +96,6 @@ class RoundReport(BaseModel):
 
 
 class DerbyReport(BaseModel):
-    """Full report of a derby run."""
     changed: bool
     final_text: str
     rounds: List[RoundReport]
@@ -79,15 +103,14 @@ class DerbyReport(BaseModel):
 
 
 class DerbySummary(BaseModel):
-    """Summary information for listing derbies."""
     id: int
     created_at: datetime.datetime
     goal: str
-    final_decision: str
+    status: str = "done"
+    final_decision: Optional[str] = None
 
 
 class DerbyResponse(BaseModel):
-    """Return value for the create and fetch endpoints."""
     id: int
     created_at: datetime.datetime
     original_text: str
@@ -96,7 +119,10 @@ class DerbyResponse(BaseModel):
     max_rounds: int
     stop_after: int
     mock_mode: bool
-    final_decision: str
-    final_text: str
-    report: DerbyReport
+    model: str = "anthropic/claude-sonnet-4-6"
+    status: str = "done"
+    betting_closes_at: Optional[datetime.datetime] = None
+    final_decision: Optional[str] = None
+    final_text: Optional[str] = None
+    report: Optional[DerbyReport] = None
     agent_entries: List[AgentEntryResult] = Field(default_factory=list)

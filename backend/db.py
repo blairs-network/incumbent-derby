@@ -32,6 +32,27 @@ engine = get_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
+def _migrate(eng):
+    """Idempotent column additions for schema evolution without Alembic."""
+    from sqlalchemy import text
+    stmts = [
+        "ALTER TABLE derbies ADD COLUMN status TEXT DEFAULT 'done'",
+        "ALTER TABLE derbies ADD COLUMN model TEXT DEFAULT 'anthropic/claude-sonnet-4-6'",
+        "ALTER TABLE derbies ADD COLUMN betting_closes_at DATETIME",
+        "ALTER TABLE agent_entries ADD COLUMN text TEXT",
+    ]
+    with eng.connect() as conn:
+        for sql in stmts:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass  # column already exists
+
+
+_migrate(engine)
+
+
 def get_db():
     """FastAPI dependency that provides a database session."""
     db = SessionLocal()
