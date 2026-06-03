@@ -176,7 +176,7 @@ async def _worker():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _queue, _loop
-    _loop = asyncio.get_event_loop()
+    _loop = asyncio.get_running_loop()
     _queue = asyncio.Queue()
     worker = asyncio.create_task(_worker())
     yield
@@ -321,6 +321,8 @@ def create_derby(payload: schemas.DerbyCreate, db: Session = Depends(get_db)):
             db.add(AgentEntry(derby_id=derby.id, agent_handle=e.handle, slot=e.slot, text=e.text))
         db.commit()
         db.refresh(derby)
+        if _queue is None or _loop is None:
+            raise HTTPException(503, "Server is still starting up — retry in a moment")
         asyncio.run_coroutine_threadsafe(_queue.put(derby.id), _loop)
         return _derby_resp(derby)
 
