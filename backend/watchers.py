@@ -35,7 +35,8 @@ from watchdog.events import FileSystemEventHandler, FileModifiedEvent
 
 from dotenv import load_dotenv
 
-from .logic import run_tournament, MockModel, AnthropicModel
+from .logic import run_tournament
+from .model_backends import resolve_model
 from .db import SessionLocal
 from .models import Derby
 
@@ -45,15 +46,14 @@ load_dotenv()
 WATCH_DIR = os.getenv("WATCH_DIR", "watched_sources")
 DEFAULT_GOAL = os.getenv("DEFAULT_GOAL", "improve clarity without changing meaning")
 MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() != "false"
+MODEL_SPEC = os.getenv("ANTHROPIC_MODEL", "anthropic/claude-sonnet-4-6")
 JUDGES = int(os.getenv("JUDGES", "5"))
 MAX_ROUNDS = int(os.getenv("MAX_ROUNDS", "5"))
 STOP_AFTER = int(os.getenv("STOP_AFTER", "2"))
 
 
 def get_model() -> object:
-    if MOCK_MODE:
-        return MockModel()
-    return AnthropicModel()
+    return resolve_model(MODEL_SPEC, mock=MOCK_MODE)
 
 
 class TextFileHandler(FileSystemEventHandler):
@@ -118,6 +118,8 @@ class TextFileHandler(FileSystemEventHandler):
             max_rounds=MAX_ROUNDS,
             stop_after=STOP_AFTER,
             mock_mode=MOCK_MODE,
+            model=MODEL_SPEC,
+            status="done",
             final_decision=final_decision,
             final_text=final_text,
             report_json=__import__("json").dumps(report),

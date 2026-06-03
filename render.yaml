@@ -5,9 +5,13 @@ services:
     plan: free
     envVars:
       - key: ANTHROPIC_API_KEY
-        sync: false
+        sync: false          # set this in the Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false          # optional — only needed for openai/* models
+      - key: ANTHROPIC_MODEL
+        value: anthropic/claude-sonnet-4-6   # override via dashboard if desired
       - key: DATABASE_URL
-        # Free tier has ephemeral disk — add a Render Persistent Disk at
-        # /data and set this to sqlite:////data/derby.db, or switch to a
-        # managed Postgres instance by setting a postgres:// URL here.
+        # Free tier has ephemeral disk — add a Render Persistent Disk mounted at
+        # /data and change this to sqlite:////data/derby.db, or switch to a
+        # managed Postgres instance by providing a postgres:// URL.
         value: sqlite:///./backend/derby.db
