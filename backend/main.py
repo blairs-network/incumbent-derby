@@ -263,6 +263,30 @@ def get_agent(handle: str, db: Session = Depends(get_db)):
     return _agent_resp(a)
 
 
+@app.get("/agents/{handle}/derbies", response_model=List[schemas.AgentDerbyEntry])
+def agent_derbies(handle: str, limit: int = 20, db: Session = Depends(get_db)):
+    results = (
+        db.query(AgentEntry, Derby)
+        .join(Derby, AgentEntry.derby_id == Derby.id)
+        .filter(AgentEntry.agent_handle == handle)
+        .order_by(Derby.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        schemas.AgentDerbyEntry(
+            derby_id=e.derby_id,
+            goal=d.goal,
+            slot=e.slot,
+            won=bool(e.won),
+            final_decision=d.final_decision if d.final_decision != "PENDING" else None,
+            status=getattr(d, "status", "done") or "done",
+            created_at=d.created_at,
+        )
+        for e, d in results
+    ]
+
+
 # ── wallets ───────────────────────────────────────────────────────────────────
 
 @app.get("/wallets/{handle}", response_model=schemas.WalletResponse)

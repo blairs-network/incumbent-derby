@@ -34,6 +34,16 @@ class AgentEntryResult(BaseModel):
     won: bool
 
 
+class AgentDerbyEntry(BaseModel):
+    derby_id: int
+    goal: str
+    slot: str
+    won: bool
+    final_decision: Optional[str] = None
+    status: str
+    created_at: datetime.datetime
+
+
 # ── wallets & bets ────────────────────────────────────────────────────────────
 
 class WalletResponse(BaseModel):
