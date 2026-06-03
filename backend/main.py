@@ -469,15 +469,60 @@ def get_derby(derby_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/derbies", response_model=List[schemas.DerbySummary])
-def list_derbies(db: Session = Depends(get_db)):
-    return [
-        schemas.DerbySummary(
+def list_derbies(status: Optional[str] = None, db: Session = Depends(get_db)):
+    ALL_SLOTS = ["A", "B", "AB"]
+    q = db.query(Derby).order_by(Derby.created_at.desc())
+    if status:
+        q = q.filter(Derby.status == status)
+    rows = q.all()
+    result = []
+    for d in rows:
+        d_status = getattr(d, "status", "done") or "done"
+        taken, open_slots = [], []
+        if d_status == "queued":
+            taken = [e.slot for e in db.query(AgentEntry).filter(AgentEntry.derby_id == d.id).all()]
+            open_slots = [s for s in ALL_SLOTS if s not in taken]
+        result.append(schemas.DerbySummary(
             id=d.id, created_at=d.created_at, goal=d.goal,
-            status=getattr(d, "status", "done") or "done",
+            status=d_status,
             final_decision=d.final_decision if d.final_decision != "PENDING" else None,
-        )
-        for d in db.query(Derby).order_by(Derby.created_at.desc()).all()
-    ]
+            original_text=d.original_text if d_status == "queued" else None,
+            model=getattr(d, "model", None) if d_status == "queued" else None,
+            betting_closes_at=getattr(d, "betting_closes_at", None) if d_status == "queued" else None,
+            slots_taken=taken,
+            slots_open=open_slots,
+        ))
+    return result
+
+
+@app.get("/derbies/{derby_id}/entries", response_model=List[schemas.AgentEntryResult])
+def list_entries(derby_id: int, db: Session = Depends(get_db)):
+    entries = db.query(AgentEntry).filter(AgentEntry.derby_id == derby_id).all()
+    return [schemas.AgentEntryResult(handle=e.agent_handle, slot=e.slot, won=bool(e.won)) for e in entries]
+
+
+@app.post("/derbies/{derby_id}/entries", response_model=schemas.AgentEntryResult, status_code=201)
+def submit_entry(derby_id: int, payload: schemas.AgentEntryInput, db: Session = Depends(get_db)):
+    derby = db.get(Derby, derby_id)
+    if not derby:
+        raise HTTPException(404, "Derby not found")
+    d_status = getattr(derby, "status", "done") or "done"
+    if d_status != "queued":
+        raise HTTPException(400, f"Entry closed — derby is already {d_status}")
+    closes_at = getattr(derby, "betting_closes_at", None)
+    if closes_at and datetime.datetime.utcnow() > closes_at:
+        raise HTTPException(400, "Entry window has closed")
+    if payload.slot not in ("A", "B", "AB"):
+        raise HTTPException(400, "slot must be A, B, or AB")
+    existing = db.query(AgentEntry).filter(
+        AgentEntry.derby_id == derby_id, AgentEntry.slot == payload.slot
+    ).first()
+    if existing:
+        raise HTTPException(409, f"Slot {payload.slot} already claimed by {existing.agent_handle}")
+    _upsert_agent(payload.handle, db)
+    db.add(AgentEntry(derby_id=derby_id, agent_handle=payload.handle, slot=payload.slot, text=payload.text))
+    db.commit()
+    return schemas.AgentEntryResult(handle=payload.handle, slot=payload.slot, won=False)
 
 
 # ── static frontend (production) ──────────────────────────────────────────────

@@ -118,6 +118,12 @@ class DerbySummary(BaseModel):
     goal: str
     status: str = "done"
     final_decision: Optional[str] = None
+    # included when status=queued so agents can decide whether to enter
+    original_text: Optional[str] = None
+    model: Optional[str] = None
+    betting_closes_at: Optional[datetime.datetime] = None
+    slots_taken: List[str] = Field(default_factory=list)
+    slots_open: List[str] = Field(default_factory=list)
 
 
 class DerbyResponse(BaseModel):

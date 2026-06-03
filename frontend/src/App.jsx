@@ -110,10 +110,60 @@ function LeaderboardPage() {
     ]).then(([a, d]) => { setAgents(a); setRecent(d); setLoading(false); });
   }, []);
 
+  const openRaces = recent.filter(r => r.status === "queued");
+
   if (loading) return <div style={{ fontFamily: mono, fontSize: 12, color: C.dim }}>LOADING…</div>;
 
   return (
     <div>
+      {/* open races — the entry board */}
+      {openRaces.length > 0 && (
+        <div style={{ marginBottom: 40 }}>
+          <Hd style={{ fontSize: 12, color: C.red }}>GATE IS OPEN — ENTER NOW</Hd>
+          <div style={{ marginTop: 12 }}>
+            {openRaces.map(r => (
+              <div key={r.id} style={{ background: C.panel, border: `1px solid ${C.red}`,
+                                       padding: "16px 18px", marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                              flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                  <div>
+                    <Hd>DERBY #{r.id}</Hd>
+                    <div style={{ marginTop: 4, fontStyle: "italic", fontSize: 15 }}>"{r.goal}"</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.red,
+                                   display: "inline-block", animation: "pulse 1s infinite" }} />
+                    <Hd style={{ color: C.red }}>GATE OPEN</Hd>
+                  </div>
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.dim, marginBottom: 8 }}>
+                  ORIGINAL: <span style={{ color: C.cream }}>{r.original_text?.slice(0, 120)}{r.original_text?.length > 120 ? "…" : ""}</span>
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <Hd>OPEN SLOTS:</Hd>
+                  {r.slots_open.map(s => (
+                    <span key={s} style={{ fontFamily: mono, fontSize: 11, padding: "2px 8px",
+                                          border: `1px solid ${C.green}`, color: C.green }}>
+                      {SLOT_NAME[s] || s}
+                    </span>
+                  ))}
+                  {r.slots_taken.map(s => (
+                    <span key={s} style={{ fontFamily: mono, fontSize: 11, padding: "2px 8px",
+                                          border: `1px solid ${C.line}`, color: C.dim,
+                                          textDecoration: "line-through" }}>
+                      {SLOT_NAME[s] || s}
+                    </span>
+                  ))}
+                  <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, marginLeft: "auto" }}>
+                    POST /derbies/{r.id}/entries
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Hd style={{ fontSize: 12 }}>AGENT LEADERBOARD</Hd>
       {agents.length === 0 ? (
         <div style={{ marginTop: 20, fontStyle: "italic", color: C.dim, fontSize: 15 }}>
