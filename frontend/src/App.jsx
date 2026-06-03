@@ -23,6 +23,7 @@ const MODELS = [
 ];
 
 const SLOT_NAME = { A: "Bold Edit", B: "Surgical Edit", AB: "Hybrid Beast", ORIGINAL: "Do Nothing" };
+const clean = (t) => t ? t.replace(/\[\[Q=-?\d+\]\]\s*/g, "") : t;
 const ORDER = ["ORIGINAL", "B", "A", "AB"];
 
 // ── hash router ───────────────────────────────────────────────────────────────
@@ -657,7 +658,7 @@ function HomePage() {
                       {isOpen && (
                         <div className="rise" style={{ marginTop: 8, background: C.panel, border: `1px solid ${C.line}`,
                                                        padding: "10px 12px", fontSize: 14, lineHeight: 1.55 }}>
-                          {cand.text}
+                          {clean(cand.text)}
                         </div>
                       )}
                     </div>
@@ -728,10 +729,10 @@ function HomePage() {
           <Hd>FINAL TEXT</Hd>
           <div style={{ marginTop: 8, background: C.panel, border: `1px solid ${C.line}`,
                         padding: "16px 18px", fontSize: 16, lineHeight: 1.55 }}>
-            {finalData.final_text}
+            {clean(finalData.final_text)}
           </div>
           <div style={{ marginTop: 12, display: "flex", gap: 18, flexWrap: "wrap" }}>
-            <button className="lk" onClick={() => { navigator.clipboard?.writeText(finalData.final_text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+            <button className="lk" onClick={() => { navigator.clipboard?.writeText(clean(finalData.final_text)); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
               {copied ? "✓ COPIED" : "⧉ COPY FINAL TEXT"}
             </button>
             <button className="lk" onClick={reset}>← NEW DERBY</button>
