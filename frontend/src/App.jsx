@@ -17,6 +17,8 @@ const MODELS = [
   { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
   { value: "anthropic/claude-opus-4-8", label: "Claude Opus 4.8" },
   { value: "anthropic/claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+  { value: "groq/llama-3.3-70b-versatile", label: "Llama 3.3 70B (Groq — free)" },
+  { value: "groq/llama-3.1-8b-instant", label: "Llama 3.1 8B (Groq — free, fast)" },
   { value: "openai/gpt-4o", label: "GPT-4o" },
   { value: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
   { value: "mock", label: "Mock (no key needed)" },

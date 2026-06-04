@@ -50,15 +50,13 @@ class AnthropicModel:
         ).strip()
 
 
-class OpenAIModel:
-    def __init__(self, model: Optional[str] = None, max_tokens: int = 2000):
-        self.model = model or "gpt-4o"
+class OpenAICompatibleModel:
+    """Handles any OpenAI-compatible endpoint: OpenAI, Groq, Cerebras, Together, etc."""
+    def __init__(self, model: str, api_key: str, base_url: str, max_tokens: int = 2000):
+        self.model = model
         self.max_tokens = max_tokens
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not set")
-        base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
-        self.url = base.rstrip("/") + "/v1/chat/completions"
+        self.api_key = api_key
+        self.url = base_url.rstrip("/") + "/v1/chat/completions"
 
     def complete(self, system: str, prompt: str, temperature: float = 1.0) -> str:
         r = httpx.post(self.url, json={
@@ -72,6 +70,26 @@ class OpenAIModel:
         }, timeout=120)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
+
+
+def OpenAIModel(model: Optional[str] = None, max_tokens: int = 2000):
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise ValueError("OPENAI_API_KEY not set")
+    base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
+    return OpenAICompatibleModel(model or "gpt-4o", key, base, max_tokens)
+
+
+def GroqModel(model: Optional[str] = None, max_tokens: int = 2000):
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
+        raise ValueError("GROQ_API_KEY not set — get a free key at console.groq.com")
+    return OpenAICompatibleModel(
+        model or "llama-3.3-70b-versatile",
+        key,
+        "https://api.groq.com/openai",
+        max_tokens,
+    )
 
 
 class MockModel:
@@ -103,7 +121,11 @@ class MockModel:
 
 
 def resolve_model(spec: str, mock: bool = False):
-    """Parse 'anthropic/claude-sonnet-4-6' or 'openai/gpt-4o' into a model instance."""
+    """Parse provider/model-id into a model instance.
+
+    Supported providers: anthropic, openai, groq, mock.
+    Custom OpenAI-compatible endpoints: set OPENAI_BASE_URL env var.
+    """
     if mock or not spec or spec == "mock":
         return MockModel()
     provider, _, model_id = spec.partition("/")
@@ -111,4 +133,6 @@ def resolve_model(spec: str, mock: bool = False):
         return AnthropicModel(model=model_id or None)
     if provider == "openai":
         return OpenAIModel(model=model_id or None)
-    raise ValueError(f"Unknown provider: {provider!r}. Use 'anthropic/...' or 'openai/...'")
+    if provider == "groq":
+        return GroqModel(model=model_id or None)
+    raise ValueError(f"Unknown provider: {provider!r}. Supported: anthropic, openai, groq, mock")
