@@ -206,9 +206,14 @@ def _upsert_agent(handle: str, db: Session) -> Agent:
     return agent
 
 
-def _agent_resp(a: Agent) -> schemas.AgentResponse:
+def _agent_resp(a: Agent, chips: float = 1000.0) -> schemas.AgentResponse:
     return schemas.AgentResponse(handle=a.handle, wins=a.wins, losses=a.losses, entries=a.entries,
-                                  win_rate=a.wins / a.entries if a.entries else 0.0)
+                                  win_rate=a.wins / a.entries if a.entries else 0.0, chips=chips)
+
+
+def _wallets(handles: list, db: Session) -> dict:
+    rows = db.query(Wallet).filter(Wallet.handle.in_(handles)).all()
+    return {w.handle: w.balance for w in rows}
 
 
 def _derby_resp(derby: Derby, report: Optional[dict] = None,
@@ -252,7 +257,9 @@ def upsert_agent(payload: schemas.AgentCreate, db: Session = Depends(get_db)):
 
 @app.get("/agents", response_model=List[schemas.AgentResponse])
 def list_agents(db: Session = Depends(get_db)):
-    return [_agent_resp(a) for a in db.query(Agent).order_by(Agent.wins.desc()).all()]
+    agents = db.query(Agent).order_by(Agent.wins.desc()).all()
+    wmap = _wallets([a.handle for a in agents], db)
+    return [_agent_resp(a, wmap.get(a.handle, 1000.0)) for a in agents]
 
 
 @app.get("/agents/{handle}", response_model=schemas.AgentResponse)
@@ -260,7 +267,8 @@ def get_agent(handle: str, db: Session = Depends(get_db)):
     a = db.query(Agent).filter(Agent.handle == handle).first()
     if not a:
         raise HTTPException(404, "Agent not found")
-    return _agent_resp(a)
+    wmap = _wallets([a.handle], db)
+    return _agent_resp(a, wmap.get(a.handle, 1000.0))
 
 
 @app.get("/agents/{handle}/derbies", response_model=List[schemas.AgentDerbyEntry])

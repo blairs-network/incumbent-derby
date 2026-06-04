@@ -20,6 +20,7 @@ class AgentResponse(BaseModel):
     losses: int
     entries: int
     win_rate: float
+    chips: float = 1000.0
 
 
 class AgentEntryInput(BaseModel):
