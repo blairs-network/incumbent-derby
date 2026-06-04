@@ -334,11 +334,14 @@ def create_derby(payload: schemas.DerbyCreate, db: Session = Depends(get_db)):
 
     external = {e.slot: e.text for e in payload.agent_entries} if payload.agent_entries else None
     seed = 0 if payload.mock_mode else _random.randint(0, 2 ** 31)
-    changed, final_text, rounds, stop_reason = run_tournament(
-        model, payload.goal, payload.original_text,
-        max_rounds=payload.max_rounds, n_judges=payload.judges,
-        stop_after=payload.stop_after, seed=seed, external_candidates=external,
-    )
+    try:
+        changed, final_text, rounds, stop_reason = run_tournament(
+            model, payload.goal, payload.original_text,
+            max_rounds=payload.max_rounds, n_judges=payload.judges,
+            stop_after=payload.stop_after, seed=seed, external_candidates=external,
+        )
+    except Exception as e:
+        raise HTTPException(502, f"Model error: {e}")
     final_decision = "CHANGE ADOPTED" if changed else "KEEP ORIGINAL"
     report = {"changed": changed, "final_text": final_text, "rounds": rounds, "stop_reason": stop_reason}
 
