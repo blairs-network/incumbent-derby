@@ -40,6 +40,7 @@ def _migrate(eng):
         "ALTER TABLE derbies ADD COLUMN model TEXT DEFAULT 'anthropic/claude-sonnet-4-6'",
         "ALTER TABLE derbies ADD COLUMN betting_closes_at DATETIME",
         "ALTER TABLE agent_entries ADD COLUMN text TEXT",
+        "ALTER TABLE agents ADD COLUMN webhook_url TEXT",
     ]
     with eng.connect() as conn:
         for sql in stmts:

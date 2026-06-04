@@ -21,6 +21,11 @@ class AgentResponse(BaseModel):
     entries: int
     win_rate: float
     chips: float = 1000.0
+    webhook_url: Optional[str] = None
+
+
+class WebhookCreate(BaseModel):
+    url: str
 
 
 class AgentEntryInput(BaseModel):

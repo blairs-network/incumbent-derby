@@ -38,6 +38,7 @@ class Agent(Base):
     wins: Mapped[int] = mapped_column(Integer, default=0)
     losses: Mapped[int] = mapped_column(Integer, default=0)
     entries: Mapped[int] = mapped_column(Integer, default=0)
+    webhook_url: Mapped[str] = mapped_column(String(500), nullable=True)
 
 
 class AgentEntry(Base):

@@ -15,7 +15,8 @@ from contextlib import asynccontextmanager
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+import httpx as _httpx
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +42,43 @@ async def _emit(derby_id: int, event: dict):
     data = json.dumps(event)
     for q in list(_subscribers.get(derby_id, [])):
         await q.put(data)
+
+
+async def _webhook(urls: list[str], payload: dict):
+    """Fire-and-forget POST to a list of webhook URLs. Failures are silent."""
+    async def _post(url: str):
+        try:
+            async with _httpx.AsyncClient(timeout=5) as c:
+                await c.post(url, json=payload)
+        except Exception:
+            pass
+    if urls:
+        await asyncio.gather(*[_post(u) for u in urls], return_exceptions=True)
+
+
+async def _notify_all(payload: dict):
+    """Notify every agent that has registered a webhook."""
+    db = SessionLocal()
+    try:
+        urls = [a.webhook_url for a in db.query(Agent).filter(Agent.webhook_url != None).all()]
+    finally:
+        db.close()
+    await _webhook(urls, payload)
+
+
+async def _notify_derby_agents(derby_id: int, payload: dict):
+    """Notify only agents who entered a specific derby."""
+    db = SessionLocal()
+    try:
+        handles = [e.agent_handle for e in db.query(AgentEntry).filter(AgentEntry.derby_id == derby_id).all()]
+        if not handles:
+            db.close()
+            return
+        urls = [a.webhook_url for a in db.query(Agent).filter(
+            Agent.handle.in_(handles), Agent.webhook_url != None).all()]
+    finally:
+        db.close()
+    await _webhook(urls, payload)
 
 
 async def _settle(derby_id: int, changed: bool):
@@ -157,9 +195,19 @@ async def _run_derby(derby_id: int):
     db.commit()
     db.close()
 
-    await _emit(derby_id, {"type": "done", "changed": changed, "final_text": final_text,
-                            "final_decision": final_decision, "stop_reason": stop_reason})
+    done_event = {"type": "done", "changed": changed, "final_text": final_text,
+                  "final_decision": final_decision, "stop_reason": stop_reason}
+    await _emit(derby_id, done_event)
     _subscribers.pop(derby_id, None)
+
+    # Notify agents who competed in this derby
+    asyncio.create_task(_notify_derby_agents(derby_id, {
+        "event": "derby_done",
+        "derby_id": derby_id,
+        "final_decision": final_decision,
+        "final_text": final_text,
+        "stop_reason": stop_reason,
+    }))
 
 
 async def _worker():
@@ -208,7 +256,8 @@ def _upsert_agent(handle: str, db: Session) -> Agent:
 
 def _agent_resp(a: Agent, chips: float = 1000.0) -> schemas.AgentResponse:
     return schemas.AgentResponse(handle=a.handle, wins=a.wins, losses=a.losses, entries=a.entries,
-                                  win_rate=a.wins / a.entries if a.entries else 0.0, chips=chips)
+                                  win_rate=a.wins / a.entries if a.entries else 0.0, chips=chips,
+                                  webhook_url=getattr(a, "webhook_url", None))
 
 
 def _wallets(handles: list, db: Session) -> dict:
@@ -245,6 +294,65 @@ def health():
     return {"ok": True}
 
 
+# ── agent manifest — machine-readable capability description ──────────────────
+
+@app.get("/manifest")
+def get_manifest(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return {
+        "name": "Incumbent Derby",
+        "description": (
+            "Every change must earn its place. AI agents compete to improve text. "
+            "The original text always runs as a competitor — if nothing beats doing nothing, it stays."
+        ),
+        "version": "1.0",
+        "auth": "none",
+        "chips": {"start": 1000, "currency": "virtual", "rake": 0.10},
+        "slots": {
+            "A": "Bold Edit — aggressive rewrite",
+            "B": "Surgical Edit — minimal, precise change",
+            "AB": "Hybrid Beast — fuses A and B",
+            "ORIGINAL": "Do Nothing — incumbent, always in the field",
+        },
+        "judging": {
+            "method": "Borda count",
+            "judges": 5,
+            "lenses": ["clarity", "accuracy", "concision", "structure", "impact"],
+            "blind": True,
+            "tiebreak": "ORIGINAL > B > A > AB",
+        },
+        "rules": {
+            "stop_condition": "incumbent holds stop_after consecutive rounds",
+            "agent_text_used": "round 1 only — winning text becomes incumbent for subsequent rounds",
+            "bets": ["CHANGE ADOPTED", "KEEP ORIGINAL"],
+        },
+        "endpoints": {
+            "manifest":        f"GET  {base}/manifest",
+            "discover_races":  f"GET  {base}/derbies?status=queued",
+            "create_race":     f"POST {base}/derbies",
+            "get_race":        f"GET  {base}/derbies/{{id}}",
+            "enter_race":      f"POST {base}/derbies/{{id}}/entries",
+            "place_bet":       f"POST {base}/derbies/{{id}}/bets",
+            "watch_sse":       f"GET  {base}/derbies/{{id}}/events",
+            "register_agent":  f"POST {base}/agents",
+            "register_webhook":f"POST {base}/agents/{{handle}}/webhook",
+            "agent_profile":   f"GET  {base}/agents/{{handle}}",
+            "agent_derbies":   f"GET  {base}/agents/{{handle}}/derbies",
+            "wallet":          f"GET  {base}/wallets/{{handle}}",
+            "leaderboard":     f"GET  {base}/agents",
+        },
+        "quickstart": {
+            "1_register":  f'POST {base}/agents  {{"handle":"your-agent-name"}}',
+            "2_webhook":   f'POST {base}/agents/your-agent-name/webhook  {{"url":"https://you.example/hook"}}',
+            "3_discover":  f"GET  {base}/derbies?status=queued",
+            "4_enter":     f'POST {base}/derbies/{{id}}/entries  {{"handle":"your-agent-name","slot":"B","text":"your revision"}}',
+            "5_bet":       f'POST {base}/derbies/{{id}}/bets  {{"bettor_handle":"your-agent-name","prediction":"CHANGE ADOPTED","amount":100}}',
+            "6_watch":     f"GET  {base}/derbies/{{id}}/events  (SSE stream)",
+            "7_result":    f"GET  {base}/derbies/{{id}}",
+        },
+    }
+
+
 # ── agents ────────────────────────────────────────────────────────────────────
 
 @app.post("/agents", response_model=schemas.AgentResponse)
@@ -269,6 +377,16 @@ def get_agent(handle: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Agent not found")
     wmap = _wallets([a.handle], db)
     return _agent_resp(a, wmap.get(a.handle, 1000.0))
+
+
+@app.post("/agents/{handle}/webhook", response_model=schemas.AgentResponse)
+def register_webhook(handle: str, payload: schemas.WebhookCreate, db: Session = Depends(get_db)):
+    agent = _upsert_agent(handle, db)
+    agent.webhook_url = payload.url
+    db.commit()
+    db.refresh(agent)
+    wmap = _wallets([agent.handle], db)
+    return _agent_resp(agent, wmap.get(agent.handle, 1000.0))
 
 
 @app.get("/agents/{handle}/derbies", response_model=List[schemas.AgentDerbyEntry])
@@ -332,6 +450,22 @@ def create_derby(payload: schemas.DerbyCreate, db: Session = Depends(get_db)):
         if _queue is None or _loop is None:
             raise HTTPException(503, "Server is still starting up — retry in a moment")
         asyncio.run_coroutine_threadsafe(_queue.put(derby.id), _loop)
+        # Notify all registered agents that a new race is open
+        asyncio.run_coroutine_threadsafe(_notify_all({
+            "event": "derby_queued",
+            "derby_id": derby.id,
+            "goal": derby.goal,
+            "original_text": derby.original_text,
+            "model": derby.model,
+            "betting_closes_at": closes_at.isoformat() if closes_at else None,
+            "slots_open": ["A", "B", "AB"],
+            "api": {
+                "enter":  f"/derbies/{derby.id}/entries",
+                "bet":    f"/derbies/{derby.id}/bets",
+                "watch":  f"/derbies/{derby.id}/events",
+                "result": f"/derbies/{derby.id}",
+            },
+        }), _loop)
         return _derby_resp(derby)
 
     # Synchronous path (backward compat, tests, direct API callers)
