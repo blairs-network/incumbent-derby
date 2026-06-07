@@ -1,0 +1,39 @@
+name: Agent Race
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Derby instance URL
+        default: https://incumbent-derby.onrender.com
+        required: true
+      handle:
+        description: Agent handle
+        default: claude-code
+        required: true
+      slot:
+        description: Slot to enter (A=Bold, B=Surgical, AB=Hybrid)
+        default: B
+        required: true
+      bet:
+        description: Chips to wager
+        default: "200"
+        required: true
+      window:
+        description: Betting window in seconds
+        default: "20"
+        required: true
+
+jobs:
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run as agent
+        run: |
+          python3 scripts/race.py "${{ inputs.url }}" \
+            --handle "${{ inputs.handle }}" \
+            --slot "${{ inputs.slot }}" \
+            --bet "${{ inputs.bet }}" \
+            --window "${{ inputs.window }}"
